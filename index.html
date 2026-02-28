@@ -652,7 +652,7 @@ function renderSummary() {
   if (!cats.length) { cd.innerHTML = '<div class="empty" style="padding:20px 0;">データなし</div>'; return; }
   cd.innerHTML = cats.map(([cat, {total: amt, selfShare}]) => {
     const r = ratios[cat] ?? 50;
-    const label = r === 50 ? '1:1' : r === 67 ? '2:1' : `${r}:${100-r}`;
+    const label = r === 50 ? '1:1' : r === 33 ? '1:2' : `${r}:${100-r}`;
     return `<div class="cat-row">
       <div class="cat-dot"></div>
       <div class="cat-name">${cat}</div>
@@ -676,7 +676,7 @@ function renderSettings() {
       </div>
       <div class="ratio-btns">
         <button class="ratio-btn ${pct===50?'active':''}" onclick="setRatio('${cat}',50)">1:1</button>
-        <button class="ratio-btn ${pct===67?'active':''}" onclick="setRatio('${cat}',67)">2:1</button>
+        <button class="ratio-btn ${pct===33?'active':''}" onclick="setRatio('${cat}',33)">1:2</button>
       </div>
     </div>`;
   }).join('');
