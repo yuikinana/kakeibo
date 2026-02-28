@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ふたりの家計簿</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --self:   #d4685e;
+    --partner:#5a8fc4;
+    --bg:     #f7f4f0;
+    --card:   #ffffff;
+    --border: #ece7e0;
+    --text:   #2a2320;
+    --muted:  #9a9290;
+    --accent: #d4685e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 220px; flex-shrink: 0; background: var(--text);
+    display: flex; flex-direction: column; padding: 32px 0 24px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .sidebar-logo { padding: 0 24px 32px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-logo .en { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 3px; color: rgba(255,255,255,0.35); margin-bottom: 4px; }
+  .sidebar-logo .ja { font-size: 17px; font-weight: 900; color: #fff; }
+  .sync-status { font-size: 10px; margin-top: 6px; display: flex; align-items: center; gap: 5px; }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #888; flex-shrink: 0; transition: background 0.3s; }
+  .sync-dot.ok { background: #4caf7d; }
+  .sync-dot.err { background: #e57373; }
+  .sync-dot.loading { background: #f0c040; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  nav { padding: 24px 16px 0; flex: 1; }
+  .nav-btn {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px;
+    border: none; border-radius: 10px; background: transparent; color: rgba(255,255,255,0.45);
+    font-family: 'Noto Sans JP', sans-serif; font-size: 13px; font-weight: 700;
+    cursor: pointer; margin-bottom: 4px; text-align: left; transition: all 0.15s;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.8); }
+  .nav-btn.active { background: var(--self); color: #fff; }
+  .nav-btn .icon { font-size: 16px; width: 20px; text-align: center; }
+  .month-selector { padding: 16px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: auto; }
+  .month-selector label { font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 2px; display: block; margin-bottom: 6px; }
+  .month-selector select {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.07); color: #fff;
+    font-family: 'Noto Sans JP', sans-serif; font-size: 13px; cursor: pointer;
+  }
+
+  .main { flex: 1; padding: 40px 48px; overflow-y: auto; }
+  .page-title { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-bottom: 6px; }
+  .page-heading { font-size: 26px; font-weight: 900; margin-bottom: 28px; }
+
+  .card { background: var(--card); border-radius: 16px; border: 1px solid var(--border); padding: 28px; margin-bottom: 20px; }
+  .card-title { font-size: 12px; font-weight: 700; letter-spacing: 2px; color: var(--muted); margin-bottom: 20px; }
+
+  .summary-bar {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px;
+    background: var(--border); border-radius: 14px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px;
+  }
+  .summary-cell { background: var(--card); padding: 20px 24px; }
+  .summary-cell .label { font-size: 10px; letter-spacing: 2px; color: var(--muted); margin-bottom: 6px; }
+  .summary-cell .value { font-size: 22px; font-weight: 900; font-family: 'DM Mono', monospace; }
+  .summary-cell .value.self { color: var(--self); }
+  .summary-cell .value.partner { color: var(--partner); }
+
+  .settle-card {
+    background: var(--text); border-radius: 16px; padding: 36px;
+    text-align: center; margin-bottom: 20px; position: relative; overflow: hidden;
+  }
+  .settle-card::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 30% 50%, rgba(212,104,94,0.25) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 50%, rgba(90,143,196,0.2) 0%, transparent 60%);
+  }
+  .settle-card .sub { font-size: 10px; letter-spacing: 3px; color: rgba(255,255,255,0.4); margin-bottom: 8px; position: relative; }
+  .settle-card .amount { font-size: 52px; font-weight: 900; font-family: 'DM Mono', monospace; color: #fff; position: relative; line-height: 1; }
+  .settle-card .desc { font-size: 15px; color: rgba(255,255,255,0.6); margin-top: 10px; position: relative; }
+  .settle-card .desc strong { color: #fff; }
+
+  .ratio-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .ratio-row:last-child { border-bottom: none; }
+  .ratio-label { width: 56px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .ratio-bar-wrap { flex: 1; height: 6px; border-radius: 3px; overflow: hidden; display: flex; }
+  .ratio-bar-self { background: var(--self); transition: width 0.2s; }
+  .ratio-bar-partner { background: var(--partner); flex: 1; }
+  .ratio-btns { display: flex; border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  .ratio-btn {
+    padding: 6px 13px; border: none; cursor: pointer; font-size: 12px; font-weight: 700;
+    font-family: 'Noto Sans JP', sans-serif; background: #fafafa; color: var(--muted); transition: all 0.15s;
+  }
+  .ratio-btn + .ratio-btn { border-left: 1.5px solid var(--border); }
+  .ratio-btn.active { background: var(--self); color: #fff; }
+
+  .cat-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .cat-row:last-child { border-bottom: none; }
+  .cat-dot { width: 4px; height: 20px; border-radius: 2px; background: var(--self); flex-shrink: 0; }
+  .cat-name { flex: 1; font-size: 13px; font-weight: 700; }
+  .cat-ratio-badge { font-size: 10px; color: var(--muted); background: var(--bg); padding: 2px 7px; border-radius: 10px; font-family: 'DM Mono', monospace; }
+  .cat-total { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 500; }
+  .cat-shares { display: flex; gap: 10px; font-size: 11px; font-family: 'DM Mono', monospace; }
+  .cat-shares .s { color: var(--self); }
+  .cat-shares .p { color: var(--partner); }
+
+  .form-row { margin-bottom: 18px; }
+  .form-label { font-size: 10px; letter-spacing: 2px; color: var(--muted); margin-bottom: 8px; display: block; }
+  .who-btns { display: flex; gap: 8px; }
+  .who-btn {
+    flex: 1; padding: 12px; border-radius: 10px; border: 2px solid var(--border);
+    background: var(--bg); font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.15s; color: var(--muted);
+  }
+  .who-btn.active-self { border-color: var(--self); background: #fef0ef; color: var(--self); }
+  .who-btn.active-partner { border-color: var(--partner); background: #eef3fb; color: var(--partner); }
+  .amount-wrap {
+    display: flex; align-items: center; border: 2px solid var(--border); border-radius: 10px;
+    padding: 0 16px; background: var(--bg);
+  }
+  .amount-wrap span { color: var(--muted); font-size: 18px; margin-right: 6px; }
+  .amount-wrap input {
+    flex: 1; border: none; background: transparent; font-size: 26px; font-weight: 900;
+    font-family: 'DM Mono', monospace; color: var(--text); padding: 10px 0; outline: none;
+  }
+  .cat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cat-chip {
+    padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+    background: var(--bg); font-size: 12px; font-weight: 700; cursor: pointer;
+    color: var(--muted); font-family: 'Noto Sans JP', sans-serif; transition: all 0.15s;
+  }
+  .cat-chip.active { border-color: var(--self); background: #fef0ef; color: var(--self); }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  input[type="date"], input[type="text"] {
+    width: 100%; padding: 10px 12px; border: 2px solid var(--border); border-radius: 10px;
+    background: var(--bg); font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
+    color: var(--text); outline: none;
+  }
+  .btn-primary {
+    width: 100%; padding: 14px; border-radius: 12px; border: none;
+    background: var(--self); color: #fff; font-family: 'Noto Sans JP', sans-serif;
+    font-size: 15px; font-weight: 900; cursor: pointer; letter-spacing: 1px; transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary {
+    width: 100%; padding: 10px; border-radius: 10px; border: 1.5px solid var(--border);
+    background: var(--bg); font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
+    font-weight: 700; color: var(--muted); cursor: pointer; transition: all 0.15s; margin-top: 8px;
+  }
+  .btn-secondary:hover { border-color: var(--muted); color: var(--text); }
+
+  .csv-drop {
+    border: 2px dashed var(--border); border-radius: 12px; padding: 28px;
+    text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg); margin-bottom: 16px;
+  }
+  .csv-drop:hover { border-color: var(--self); background: #fff9f8; }
+  .csv-drop .icon { font-size: 32px; margin-bottom: 8px; }
+  .csv-drop .label { font-size: 13px; font-weight: 700; color: var(--self); }
+  .csv-drop .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .csv-sample {
+    font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted);
+    background: var(--bg); border-radius: 8px; padding: 12px 14px; line-height: 1.9; margin-bottom: 16px;
+  }
+  textarea {
+    width: 100%; border: 2px solid var(--border); border-radius: 10px; padding: 12px;
+    font-family: 'DM Mono', monospace; font-size: 12px; background: var(--bg);
+    color: var(--text); resize: vertical; outline: none; margin-bottom: 8px;
+  }
+
+  .entry-row {
+    display: flex; align-items: center; gap: 14px; padding: 13px 0;
+    border-bottom: 1px solid var(--border); animation: fadeIn 0.2s ease;
+  }
+  .entry-row:last-child { border-bottom: none; }
+  .entry-avatar { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .entry-info { flex: 1; min-width: 0; }
+  .entry-top { display: flex; justify-content: space-between; align-items: center; }
+  .entry-cat { font-size: 13px; font-weight: 700; }
+  .entry-amount { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500; }
+  .entry-bottom { display: flex; justify-content: space-between; margin-top: 2px; }
+  .entry-meta { font-size: 11px; color: var(--muted); }
+  .entry-memo { font-size: 11px; color: #c0bbb8; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .del-btn { background: none; border: none; color: #ddd; cursor: pointer; font-size: 20px; padding: 4px; flex-shrink: 0; transition: color 0.15s; }
+  .del-btn:hover { color: #e88; }
+  .empty { text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px; }
+
+  #toast {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: #fff; padding: 12px 24px; border-radius: 24px;
+    font-size: 13px; font-weight: 700; z-index: 999; opacity: 0;
+    transition: all 0.25s; white-space: nowrap; pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  @media (max-width: 700px) {
+    .sidebar { display: none; }
+    .main { padding: 24px 16px 80px; }
+    .mobile-nav {
+      display: flex; position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--text); z-index: 100; border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .mobile-nav-btn {
+      flex: 1; padding: 12px 0; border: none; background: none; cursor: pointer;
+      color: rgba(255,255,255,0.4); font-family: 'Noto Sans JP', sans-serif;
+      font-size: 10px; font-weight: 700; transition: color 0.15s;
+    }
+    .mobile-nav-btn.active { color: var(--self); }
+    .mobile-nav-btn .micon { font-size: 20px; display: block; margin-bottom: 2px; }
+    .summary-bar { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+  @media (min-width: 701px) { .mobile-nav { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="en">FUTARI NO KAKEIBO</div>
+      <div class="ja">ふたりの家計簿</div>
+      <div class="sync-status">
+        <div class="sync-dot loading" id="syncDot"></div>
+        <span style="font-size:10px;color:rgba(255,255,255,0.3);" id="syncLabel">接続中...</span>
+      </div>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-page="input" onclick="showPage('input')"><span class="icon">✏️</span> 入力</button>
+      <button class="nav-btn" data-page="csv" onclick="showPage('csv')"><span class="icon">📂</span> CSVインポート</button>
+      <button class="nav-btn" data-page="history" onclick="showPage('history')"><span class="icon">📋</span> 履歴</button>
+      <button class="nav-btn" data-page="summary" onclick="showPage('summary')"><span class="icon">💰</span> 精算</button>
+      <button class="nav-btn" data-page="settings" onclick="showPage('settings')"><span class="icon">⚙️</span> 設定</button>
+    </nav>
+    <div class="month-selector">
+      <label>表示月</label>
+      <select id="monthSelect" onchange="onMonthChange()"></select>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- INPUT -->
+    <section id="page-input">
+      <div class="page-title">EXPENSE INPUT</div>
+      <div class="page-heading">支出を追加</div>
+      <div class="card">
+        <div class="form-row">
+          <label class="form-label">支払った人</label>
+          <div class="who-btns">
+            <button class="who-btn active-self" id="whoSelf" onclick="setWho('自分')">ゆい</button>
+            <button class="who-btn" id="whoPartner" onclick="setWho('パートナー')">しんや</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">金額</label>
+          <div class="amount-wrap"><span>¥</span><input type="number" id="amountInput" placeholder="0" min="0"></div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">カテゴリ</label>
+          <div class="cat-chips" id="catChips"></div>
+        </div>
+        <div class="form-row form-grid">
+          <div><label class="form-label">日付</label><input type="date" id="dateInput"></div>
+          <div><label class="form-label">メモ（任意）</label><input type="text" id="memoInput" placeholder="例：スーパー"></div>
+        </div>
+        <button class="btn-primary" id="addBtn" onclick="addEntry()">追加する</button>
+      </div>
+    </section>
+
+    <!-- CSV -->
+    <section id="page-csv" style="display:none">
+      <div class="page-title">CSV IMPORT</div>
+      <div class="page-heading">CSVインポート</div>
+      <div class="card">
+        <div class="card-title">使い方</div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.8;margin-bottom:16px;">
+          ゆい・しんやそれぞれがCSVを用意して、両方を読み込むと自動でマージされます。<br>
+          列の順番は自由。ヘッダー行が必須です。
+        </p>
+        <div class="csv-sample">
+日付,金額,支払者,カテゴリ,メモ<br>
+2024-01-05,3200,自分,食費,スーパー<br>
+2024-01-07,8500,パートナー,光熱費,電気代
+        </div>
+        <label style="display:block;cursor:pointer;">
+          <div class="csv-drop">
+            <div class="icon">📂</div>
+            <div class="label">CSVファイルを選択（複数可）</div>
+            <div class="hint">.csv ファイル</div>
+          </div>
+          <input type="file" id="csvFileInput" accept=".csv,text/csv" multiple style="display:none" onchange="handleFileInput(event)">
+        </label>
+        <label class="form-label" style="margin-bottom:6px;">またはCSVテキストを貼り付け</label>
+        <textarea id="csvPaste" rows="5" placeholder="日付,金額,支払者,カテゴリ,メモ&#10;2024-01-05,3200,自分,食費,スーパー"></textarea>
+        <button class="btn-primary" onclick="importFromPaste()">テキストをインポート</button>
+        <button class="btn-secondary" onclick="clearAll()">⚠️ すべてのデータを削除</button>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="page-history" style="display:none">
+      <div class="page-title">HISTORY</div>
+      <div class="page-heading">履歴</div>
+      <div class="card" id="historyList"><div class="empty">読み込み中...</div></div>
+    </section>
+
+    <!-- SUMMARY -->
+    <section id="page-summary" style="display:none">
+      <div class="page-title">SETTLEMENT</div>
+      <div class="page-heading">月次精算</div>
+      <div class="summary-bar">
+        <div class="summary-cell"><div class="label">ゆいの支出</div><div class="value self" id="sumSelf">¥0</div></div>
+        <div class="summary-cell"><div class="label">しんやの支出</div><div class="value partner" id="sumPartner">¥0</div></div>
+        <div class="summary-cell"><div class="label">合計</div><div class="value" id="sumTotal">¥0</div></div>
+      </div>
+      <div class="settle-card" id="settleCard"><div class="sub">SETTLEMENT</div><div style="color:rgba(255,255,255,0.4);position:relative;">読み込み中...</div></div>
+      <div class="card"><div class="card-title">カテゴリ別内訳</div><div id="catDetail"></div></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="page-settings" style="display:none">
+      <div class="page-title">SETTINGS</div>
+      <div class="page-heading">負担割合の設定</div>
+      <div class="card">
+        <div class="card-title">カテゴリ別 ゆい：しんや</div>
+        <div style="display:flex;gap:16px;margin-bottom:20px;font-size:11px;">
+          <span style="display:flex;align-items:center;gap:5px;color:var(--muted);"><span style="width:10px;height:10px;border-radius:50%;background:var(--self);display:inline-block;"></span>ゆい</span>
+          <span style="display:flex;align-items:center;gap:5px;color:var(--muted);"><span style="width:10px;height:10px;border-radius:50%;background:var(--partner);display:inline-block;"></span>しんや</span>
+        </div>
+        <div id="ratioList"></div>
+        <button class="btn-secondary" onclick="resetRatios()">すべて 1:1 にリセット</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="mobile-nav">
+  <button class="mobile-nav-btn active" data-page="input" onclick="showPage('input')"><span class="micon">✏️</span>入力</button>
+  <button class="mobile-nav-btn" data-page="csv" onclick="showPage('csv')"><span class="micon">📂</span>CSV</button>
+  <button class="mobile-nav-btn" data-page="history" onclick="showPage('history')"><span class="micon">📋</span>履歴</button>
+  <button class="mobile-nav-btn" data-page="summary" onclick="showPage('summary')"><span class="micon">💰</span>精算</button>
+  <button class="mobile-nav-btn" data-page="settings" onclick="showPage('settings')"><span class="micon">⚙️</span>設定</button>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+// ── Supabase config ──
+const SUPABASE_URL = 'https://hyvckjfgznrwumhmkgfm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5dmNramZnem5yd3VtaG1rZ2ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNzkwNjAsImV4cCI6MjA4Nzg1NTA2MH0.uaZ1ymkvcWT3kmQBDaADuI6oHocxoZF1fSyBu17tjFM';
+const HEADERS = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY };
+
+async function sbGet(table, params = '') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, { headers: { ...HEADERS, 'Prefer': 'return=representation' } });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+async function sbPost(table, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST', headers: { ...HEADERS, 'Prefer': 'return=representation' }, body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+async function sbPatch(table, params, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, {
+    method: 'PATCH', headers: { ...HEADERS, 'Prefer': 'return=representation' }, body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+async function sbDelete(table, params) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, { method: 'DELETE', headers: HEADERS });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ── state ──
+const CATEGORIES = ["食費","光熱費","日用品","外食","交通費","医療費","娯楽","その他"];
+const DEFAULT_RATIOS = Object.fromEntries(CATEGORIES.map(c => [c, 50]));
+
+let entries = [];      // loaded from Supabase
+let ratios = { ...DEFAULT_RATIOS };
+let currentMonth = new Date().toISOString().slice(0, 7);
+let currentPage = 'input';
+let currentWho = '自分';
+let currentCat = '食費';
+
+// ── sync status ──
+function setSyncStatus(status, label) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.className = 'sync-dot ' + status;
+  lbl.textContent = label;
+}
+
+// ── init ──
+async function init() {
+  document.getElementById('dateInput').value = new Date().toISOString().slice(0, 10);
+  buildCatChips();
+  setSyncStatus('loading', '接続中...');
+  try {
+    // load settings
+    const settings = await sbGet('settings', '?id=eq.1');
+    if (settings[0]?.ratios) ratios = { ...DEFAULT_RATIOS, ...settings[0].ratios };
+    // load entries
+    entries = await sbGet('entries', '?order=date.desc');
+    setSyncStatus('ok', 'リアルタイム同期中');
+    buildMonthSelect();
+    render();
+    // realtime via polling every 15s
+    setInterval(syncEntries, 15000);
+  } catch (e) {
+    setSyncStatus('err', '接続エラー');
+    toast('Supabaseへの接続に失敗しました');
+    console.error(e);
+  }
+}
+
+async function syncEntries() {
+  try {
+    entries = await sbGet('entries', '?order=date.desc');
+    buildMonthSelect();
+    render();
+    setSyncStatus('ok', '同期済み ' + new Date().toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'}));
+  } catch(e) {
+    setSyncStatus('err', '同期エラー');
+  }
+}
+
+// ── months ──
+function getMonths() {
+  const s = new Set(entries.map(e => e.date.slice(0, 7)));
+  s.add(currentMonth);
+  return [...s].sort().reverse();
+}
+
+function buildMonthSelect() {
+  const sel = document.getElementById('monthSelect');
+  const saved = sel.value || currentMonth;
+  const months = getMonths();
+  sel.innerHTML = months.map(m => {
+    const [y, mo] = m.split('-');
+    return `<option value="${m}" ${m === saved ? 'selected' : ''}>${y}年${parseInt(mo)}月</option>`;
+  }).join('');
+  currentMonth = sel.value;
+}
+
+function onMonthChange() {
+  currentMonth = document.getElementById('monthSelect').value;
+  render();
+}
+
+function monthEntries() {
+  return entries.filter(e => e.date.slice(0,7) === currentMonth).sort((a,b) => b.date.localeCompare(a.date));
+}
+
+// ── nav ──
+function showPage(page) {
+  currentPage = page;
+  document.querySelectorAll('.nav-btn, .mobile-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  document.querySelectorAll('section[id^="page-"]').forEach(s => s.style.display = s.id === 'page-' + page ? '' : 'none');
+  render();
+}
+
+// ── form ──
+function setWho(who) {
+  currentWho = who;
+  document.getElementById('whoSelf').className = 'who-btn' + (who === '自分' ? ' active-self' : '');
+  document.getElementById('whoPartner').className = 'who-btn' + (who === 'パートナー' ? ' active-partner' : '');
+}
+
+function buildCatChips() {
+  document.getElementById('catChips').innerHTML = CATEGORIES.map(c =>
+    `<button class="cat-chip ${c === currentCat ? 'active' : ''}" onclick="setCat('${c}')">${c}</button>`
+  ).join('');
+}
+
+function setCat(cat) { currentCat = cat; buildCatChips(); }
+
+async function addEntry() {
+  const amt = parseInt(document.getElementById('amountInput').value);
+  if (!amt || amt <= 0) { toast('金額を入力してください'); return; }
+  const date = document.getElementById('dateInput').value || new Date().toISOString().slice(0,10);
+  const memo = document.getElementById('memoInput').value;
+  const btn = document.getElementById('addBtn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  try {
+    const [saved] = await sbPost('entries', { date, amount: amt, who: currentWho, category: currentCat, memo });
+    entries.unshift(saved);
+    buildMonthSelect();
+    document.getElementById('amountInput').value = '';
+    document.getElementById('memoInput').value = '';
+    toast('追加しました！');
+  } catch(e) {
+    toast('保存に失敗しました'); console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = '追加する';
+  }
+}
+
+// ── delete ──
+async function deleteEntry(id) {
+  try {
+    await sbDelete('entries', `?id=eq.${id}`);
+    entries = entries.filter(e => e.id !== id);
+    renderHistory();
+  } catch(e) { toast('削除に失敗しました'); }
+}
+
+// ── CSV ──
+function handleFileInput(e) {
+  const files = [...e.target.files];
+  let pending = files.length, total = 0;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      total += await importCSV(ev.target.result, true);
+      if (--pending === 0) { buildMonthSelect(); render(); toast(`${total}件をインポートしました`); }
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
+  e.target.value = '';
+}
+
+async function importFromPaste() {
+  const text = document.getElementById('csvPaste').value;
+  if (!text.trim()) { toast('テキストを入力してください'); return; }
+  const n = await importCSV(text);
+  if (n > 0) { document.getElementById('csvPaste').value = ''; buildMonthSelect(); render(); }
+}
+
+async function importCSV(text, silent = false) {
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  if (lines.length < 2) { if (!silent) toast('データが見つかりません'); return 0; }
+  const header = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+  const colMap = {};
+  header.forEach((h, i) => {
+    const lh = h.toLowerCase();
+    if (['日付','date','年月日'].some(k => lh.includes(k))) colMap.date = i;
+    else if (['金額','amount','price','費用'].some(k => lh.includes(k))) colMap.amount = i;
+    else if (['支払','誰','who','名前','person','担当'].some(k => lh.includes(k))) colMap.who = i;
+    else if (['カテゴリ','category','種別','分類'].some(k => lh.includes(k))) colMap.category = i;
+    else if (['メモ','memo','備考','note','説明'].some(k => lh.includes(k))) colMap.memo = i;
+  });
+  if (colMap.amount === undefined) { if (!silent) toast('金額列が見つかりません'); return 0; }
+
+  const toInsert = [];
+  lines.slice(1).forEach(line => {
+    const cols = line.split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
+    const amount = parseInt(cols[colMap.amount]?.replace(/[¥,￥\s]/g, ''));
+    if (!amount || isNaN(amount)) return;
+    let date = (colMap.date !== undefined ? cols[colMap.date] : '').replace(/\//g, '-');
+    if (/^\d{8}$/.test(date)) date = `${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}`;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = new Date().toISOString().slice(0,10);
+    const rawWho = colMap.who !== undefined ? cols[colMap.who] : '';
+    const who = ['パートナー','partner','妻','夫'].some(k => rawWho.includes(k)) ? 'パートナー' : '自分';
+    const rawCat = colMap.category !== undefined ? cols[colMap.category] : '';
+    const category = CATEGORIES.includes(rawCat) ? rawCat : 'その他';
+    const memo = colMap.memo !== undefined ? cols[colMap.memo] || '' : '';
+    toInsert.push({ date, amount, who, category, memo });
+  });
+
+  if (toInsert.length === 0) { if (!silent) toast('有効なデータがありませんでした'); return 0; }
+  try {
+    const saved = await sbPost('entries', toInsert);
+    entries = [...entries, ...saved].sort((a,b) => b.date.localeCompare(a.date));
+    if (!silent) toast(`${saved.length}件をインポートしました`);
+    return saved.length;
+  } catch(e) { if (!silent) toast('インポートに失敗しました'); console.error(e); return 0; }
+}
+
+async function clearAll() {
+  if (!confirm('すべてのデータを削除しますか？')) return;
+  try {
+    await sbDelete('entries', '?id=neq.00000000-0000-0000-0000-000000000000');
+    entries = []; buildMonthSelect(); render(); toast('削除しました');
+  } catch(e) { toast('削除に失敗しました'); }
+}
+
+// ── render ──
+function render() {
+  if (currentPage === 'history') renderHistory();
+  if (currentPage === 'summary') renderSummary();
+  if (currentPage === 'settings') renderSettings();
+}
+
+function renderHistory() {
+  const list = monthEntries();
+  const el = document.getElementById('historyList');
+  if (list.length === 0) { el.innerHTML = '<div class="empty">この月の記録はありません</div>'; return; }
+  el.innerHTML = list.map(e => `
+    <div class="entry-row">
+      <div class="entry-avatar" style="background:${e.who==='自分'?'#fef0ef':'#eef3fb'}">${e.who==='自分'?'🌸':'🌊'}</div>
+      <div class="entry-info">
+        <div class="entry-top">
+          <span class="entry-cat">${e.category}</span>
+          <span class="entry-amount" style="color:${e.who==='自分'?'var(--self)':'var(--partner)'}">¥${e.amount.toLocaleString()}</span>
+        </div>
+        <div class="entry-bottom">
+          <span class="entry-meta">${e.who}・${e.date}</span>
+          <span class="entry-memo">${e.memo||''}</span>
+        </div>
+      </div>
+      <button class="del-btn" onclick="deleteEntry('${e.id}')">×</button>
+    </div>
+  `).join('');
+}
+
+function calcSummary() {
+  const list = monthEntries();
+  const totals = {'自分':0,'パートナー':0};
+  const byCategory = {};
+  let totalSelfShare = 0;
+  list.forEach(e => {
+    totals[e.who] += e.amount;
+    if (!byCategory[e.category]) byCategory[e.category] = { total:0, selfShare:0 };
+    byCategory[e.category].total += e.amount;
+    const pct = (ratios[e.category] ?? 50) / 100;
+    byCategory[e.category].selfShare += e.amount * pct;
+    totalSelfShare += e.amount * pct;
+  });
+  const total = totals['自分'] + totals['パートナー'];
+  return { totals, total, totalSelfShare, diff: totals['自分'] - totalSelfShare, byCategory };
+}
+
+function renderSummary() {
+  const { totals, total, diff, byCategory } = calcSummary();
+  document.getElementById('sumSelf').textContent = '¥' + totals['自分'].toLocaleString();
+  document.getElementById('sumPartner').textContent = '¥' + totals['パートナー'].toLocaleString();
+  document.getElementById('sumTotal').textContent = '¥' + total.toLocaleString();
+
+  const sc = document.getElementById('settleCard');
+  if (total === 0) {
+    sc.innerHTML = '<div class="sub">SETTLEMENT</div><div style="font-size:18px;color:rgba(255,255,255,0.6);position:relative;">まだ記録がありません</div>';
+  } else if (Math.abs(diff) < 1) {
+    sc.innerHTML = '<div class="sub">SETTLEMENT</div><div class="amount" style="font-size:36px;">🎉</div><div class="desc">ぴったり！支払いなし</div>';
+  } else {
+    const payer = diff > 0 ? 'しんや' : 'ゆい';
+    const receiver = diff > 0 ? 'ゆい' : 'しんや';
+    sc.innerHTML = `<div class="sub">SETTLEMENT</div><div class="amount">¥${Math.round(Math.abs(diff)).toLocaleString()}</div><div class="desc"><strong>${payer}</strong> が <strong>${receiver}</strong> に支払う</div>`;
+  }
+
+  const cd = document.getElementById('catDetail');
+  const cats = Object.entries(byCategory).sort((a,b) => b[1].total - a[1].total);
+  if (!cats.length) { cd.innerHTML = '<div class="empty" style="padding:20px 0;">データなし</div>'; return; }
+  cd.innerHTML = cats.map(([cat, {total: amt, selfShare}]) => {
+    const r = ratios[cat] ?? 50;
+    const label = r === 50 ? '1:1' : r === 67 ? '2:1' : `${r}:${100-r}`;
+    return `<div class="cat-row">
+      <div class="cat-dot"></div>
+      <div class="cat-name">${cat}</div>
+      <span class="cat-ratio-badge">${label}</span>
+      <div style="text-align:right;">
+        <div class="cat-total">¥${amt.toLocaleString()}</div>
+        <div class="cat-shares"><span class="s">ゆい ¥${Math.round(selfShare).toLocaleString()}</span><span class="p">しんや ¥${Math.round(amt-selfShare).toLocaleString()}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderSettings() {
+  document.getElementById('ratioList').innerHTML = CATEGORIES.map(cat => {
+    const pct = ratios[cat] ?? 50;
+    return `<div class="ratio-row">
+      <span class="ratio-label">${cat}</span>
+      <div class="ratio-bar-wrap">
+        <div class="ratio-bar-self" style="width:${pct}%"></div>
+        <div class="ratio-bar-partner"></div>
+      </div>
+      <div class="ratio-btns">
+        <button class="ratio-btn ${pct===50?'active':''}" onclick="setRatio('${cat}',50)">1:1</button>
+        <button class="ratio-btn ${pct===67?'active':''}" onclick="setRatio('${cat}',67)">2:1</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function setRatio(cat, pct) {
+  ratios[cat] = pct;
+  renderSettings();
+  try {
+    await sbPatch('settings', '?id=eq.1', { ratios });
+  } catch(e) { toast('設定の保存に失敗しました'); }
+}
+
+async function resetRatios() {
+  ratios = { ...DEFAULT_RATIOS };
+  renderSettings();
+  try {
+    await sbPatch('settings', '?id=eq.1', { ratios });
+    toast('リセットしました');
+  } catch(e) { toast('設定の保存に失敗しました'); }
+}
+
+// ── toast ──
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+init();
+</script>
+</body>
+</html>
